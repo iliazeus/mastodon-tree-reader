@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <style>
+      .global_actions a {
+        font-size: 125%;
+        margin: 0.25em;
+        text-decoration: none;
+      }
+      .post {
+        margin: 0;
+        padding: 0;
+      }
+      .post > summary {
+        display: block;
+        border: 1px solid #ccc;
+        border-left: 4px solid;
+        max-width: 50em;
+      }
+      @media (max-width: 50em) {
+        .post > summary {
+          min-width: 80vw;
+        }
+      }
+      .post > summary > .header {
+        margin: 4px;
+        font-size: smaller;
+        white-space: nowrap;
+        overflow-x: scroll;
+      }
+      .post > summary > .header > .avatar {
+        float: left;
+        margin-right: 0.5em;
+        width: 2lh;
+        height: 2lh;
+      }
+      .post > summary > .header > a {
+        text-decoration: none;
+      }
+      .post > summary > .content {
+        display: none;
+        margin: 4px 8px;
+      }
+      .post[open] > summary > .content {
+        display: block;
+      }
+      .post > summary > .content details > summary {
+        cursor: pointer;
+      }
+      .post > summary > .content p,
+      .post > summary > .content blockquote {
+        margin-top: 4px;
+        margin-bottom: 4px;
+      }
+      .post > summary > .attachments {
+        display: none;
+        margin-left: 8px;
+      }
+      .post[open] > summary > .attachments {
+        display: block;
+      }
+      .post > summary > .attachments > summary {
+        cursor: pointer;
+      }
+      .post > summary > .attachments img {
+        max-width: 64px;
+        max-height: 64px;
+      }
+      .post > summary > .actions {
+        display: none;
+        margin: 12px 8px 2px 8px;
+        overflow-x: scroll;
+      }
+      .post[open] > summary > .actions {
+        display: block;
+      }
+      .post > summary > .actions > summary {
+        display: none;
+      }
+      .post > summary > .actions > a {
+        font-size: 125%;
+        margin: 0.25em;
+        text-decoration: none;
+      }
+      .post > .replies {
+        margin-left: 4px;
+      }
+    </style>
+
+    <script>
+      window.addEventListener("load", async () => {
+        let params = new URLSearchParams(window.location.search);
+
+        if (params.get("logout")) {
+          sessionStorage.removeItem("token:" + params.get("logout"));
+          let newUrl = new URL(window.location);
+          newUrl.searchParams.delete("logout");
+          window.history.replaceState(null, "", newUrl);
+        }
+
+        let postUrl = params.get("url");
+        if (!postUrl) return;
+        postUrl = new URL(postUrl);
+
+        let baseUrl = new URL(postUrl.origin);
+        let code = params.get("code");
+        let token = JSON.parse(
+          sessionStorage.getItem("token:" + baseUrl) ?? "null"
+        );
+
+        if (!token && !code) {
+          let redirect_uri = new URL(window.location);
+          redirect_uri.search = "";
+          redirect_uri.searchParams.set("url", postUrl);
+          let query = new URLSearchParams({
+            response_type: "code",
+            client_id: "CIJFrOR_hvQC0hjR8VGer2a7mEquYYzswH8UmcDsRrE",
+            redirect_uri,
+          });
+          window.location = new URL("/oauth/authorize?" + query, baseUrl);
+          return;
+        }
+
+        if (!token) {
+          let redirect_uri = new URL(window.location);
+          redirect_uri.search = "";
+          redirect_uri.searchParams.set("url", postUrl);
+          let body = new FormData();
+          body.set("grant_type", "authorization_code");
+          body.set("code", params.get("code"));
+          body.set("client_id", "CIJFrOR_hvQC0hjR8VGer2a7mEquYYzswH8UmcDsRrE");
+          body.set(
+            "client_secret",
+            "NvixkNKze_pdrddUP6PIUnK_aYzS1IiAEMevYMREY-k"
+          );
+          body.set("redirect_uri", redirect_uri);
+          let response = await fetch(new URL("/oauth/token", baseUrl), {
+            method: "post",
+            body,
+          });
+          if (!response.ok) throw new Error(await response.text());
+          token = await response.text();
+          sessionStorage.setItem("token:" + baseUrl, token);
+          let newUrl = new URL(window.location);
+          newUrl.searchParams.delete("code");
+          window.history.replaceState(null, "", newUrl);
+        }
+
+        {
+          // prevent details collapsing on selection
+          let tt = null;
+          document.addEventListener("mousedown", (e) => {
+            tt = window.getSelection()?.type;
+          });
+          document.addEventListener("click", (e) => {
+            let s = e.target.closest("summary");
+            let t = window.getSelection()?.type;
+            if (e.button === 0 && s && (t === "Range" || tt === "Range"))
+              e.preventDefault();
+          });
+        }
+
+        document.addEventListener("contextmenu", (e) => {
+          let a = e.target
+            .closest(".post > summary")
+            ?.querySelector(".actions");
+          if (a && a.hasAttribute("open")) {
+            a.removeAttribute("open");
+          } else if (a) {
+            a.setAttribute("open", "");
+            e.preventDefault();
+          }
+        });
+
+        fetchAndRenderTree(token.access_token, postUrl, baseUrl);
+
+        async function fetchAndRenderTree(token, postUrl, baseUrl) {
+          let postId = postUrl.pathname.split("/").at(-1);
+
+          let get = async (path) => {
+            let url = new URL(path, baseUrl);
+            let response = await fetch(url, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error(await response.text());
+            return await response.json();
+          };
+
+          let [requestedPost, postContext] = await Promise.all([
+            get(`/api/v1/statuses/${postId}`),
+            get(`/api/v1/statuses/${postId}/context`),
+          ]);
+
+          let posts = new Map();
+          posts.set(requestedPost.id, requestedPost);
+          for (let p of postContext.descendants) posts.set(p.id, p);
+
+          for (let post of posts.values()) {
+            if (!post.replies) post.replies = [];
+            if (!post.in_reply_to_id) continue;
+            let parent = posts.get(post.in_reply_to_id);
+            if (!parent) continue;
+            if (!parent.replies) parent.replies = [];
+            parent.replies.push(post);
+          }
+
+          console.log(requestedPost);
+
+          let html = renderPost(requestedPost, baseUrl);
+
+          // prettier-ignore
+          html = `<div class="global_actions">
+            <a title="Main page" href=".">🏠</a>
+            <a title="Logout" href="?logout=${encodeURI(baseUrl)}">🚪</a>
+          </div>` + html;
+
+          if (postContext.ancestors.length > 0) {
+            let rootPost = postContext.ancestors[0];
+            let rootPostUrl = new URL(
+              "@" + rootPost.account.acct + "/" + rootPost.id,
+              baseUrl
+            );
+            // prettier-ignore
+            html = `<p>You are viewing a single post's subthread. <a href="?url=${encodeURI(rootPostUrl)}">View full thread</a></p>` + html;
+          }
+
+          let mainEl = document.querySelector("main");
+          mainEl.innerHTML = html;
+
+          mainEl
+            .querySelectorAll(".post > summary > .actions")
+            .forEach((el) => (el.open = null));
+          mainEl.querySelectorAll(".post").forEach((el) => {
+            el.addEventListener("toggle", (e) => {
+              if (!e.target.hasAttribute("open")) {
+                e.target
+                  .querySelectorAll(".post:not([open])")
+                  .forEach((el) => el.setAttribute("open", ""));
+                e.target
+                  .querySelectorAll(".actions[open]")
+                  .forEach((el) => el.removeAttribute("open"));
+                e.target.scrollIntoView({ block: "nearest" });
+              }
+            });
+          });
+
+          document
+            .querySelector(`#post_${requestedPost.id} > summary`)
+            .scrollIntoView({ block: "nearest" });
+        }
+      });
+
+      function renderPost(post, baseUrl, depth = 0) {
+        let acctUrl = new URL("@" + post.account.acct, baseUrl);
+        let postUrl = new URL("@" + post.account.acct + "/" + post.id, baseUrl);
+
+        // prettier-ignore
+        return `
+          <details open class="post" id="post_${post.id}">
+            <summary title="Show/hide post" style="border-left-color: ${getDepthColor(depth)}">
+              <div class="header">
+                <img class="avatar" alt="Avatar of ${post.account.username}" src="${post.account.avatar_static}" />
+                <a class="username" title="Profile page of ${post.account.username} on ${baseUrl.host}" rel="author" target="_blank" href="${acctUrl}">${post.account.username}</a>
+                <a class="acct" title="Profile page of ${post.account.username} on their server" rel="author" target="_blank" href="${post.account.url}">@${post.account.acct.includes('@') ? post.account.acct : `${post.account.acct}@${baseUrl.host}`}</a>
+                <br />
+                ${post.visibility === "public" ? `<span class="visibility" title="Public">🌐</span>` : ''}
+                ${post.visibility === "unlisted" ? `<span class="visibility" title="Unlisted">🔓</span>` : ''}
+                ${post.visibility === "private" ? `<span class="visibility" title="Followers only">🔒</span>` : ''}
+                ${post.visibility === "direct" ? `<span class="visibility" title="Direct">✉️</span>` : ''}
+                <a class="favourites_count" title="Open list of likes on ${baseUrl.host}" target="_blank" href="${postUrl}/favourites">⭐${post.favourites_count}</a>
+                <a class="reblogs_count" title="Open list of boosts on ${baseUrl.host}" target="_blank" href="${postUrl}/reblogs">🚀${post.reblogs_count}</a>
+                <a class="replies_count" title="Open replies on ${baseUrl.host}" target="_blank" href="${postUrl}">🗨️${post.replies_count}</a>
+                <a class="created_at" title="Open post on ${baseUrl.host}" rel="alternate" target="_blank" href="${postUrl}">${new Date(post.edited_at ?? post.created_at).toLocaleString()}</a>
+                ${post.edited_at ? `<span class="edited" title="Edited post">✏️</span>` : ''}
+                </div>
+              <div class="content">
+                ${post.spoiler_text && `<details><summary>${post.spoiler_text}</summary>`}
+                ${processContent(post.content)}
+                ${post.spoiler_text && `</details>`}
+              </div>
+              ${renderAttachments(post.media_attachments)}
+              <details open class="actions">
+                <summary></summary>
+                <a class="action_close" title="Close this panel" onclick="this.parentElement.removeAttribute('open')" href="javascript:">❎</a>
+                <a class="action_favourite" title="Like" href="javascript:">⭐</a>
+                <a class="action_reblog" title="Boost" href="javascript:">🚀</a>
+                <a class="action_post" title="Reply" target="_blank" href="${postUrl}">🗨️</a>
+                <a class="action_account" title="Open author's profile" target="_blank" href="${acctUrl}">🙂</a>
+                <a class="action_remote_post" title="Open on their server" target="_blank" href="${post.url}">🔗🗨️</a>
+                <a class="action_remote_account" title="Open author's profile on their server" target="_blank" href="${post.account.url}">🔗🙂</a>
+              </details>
+            </summary>
+            <div class="replies">${
+              post.replies.map((reply) => renderPost(reply, baseUrl, depth + 1)).join('')
+            }</div>
+          </details>
+        `;
+      }
+
+      function renderAttachments(atts) {
+        if (!atts || atts.length === 0) return "";
+
+        // prettier-ignore
+        atts = atts.map((a) => {
+          if (a.type === "image") return `<a title="${a.description ?? ''}" target="_blank" href="${a.url}"><img src="${a.preview_url}" alt="${a.description ?? ''}" /></a>`;
+          return `<a href="${a.url}">${a.url}</a>`;
+        });
+
+        // prettier-ignore
+        return `
+          <details class="attachments">
+            <summary>${pluralizeCount(atts.length, "attachment")}</summary>
+            ${atts.join("")}
+          </details>
+        `;
+      }
+
+      function processContent(content) {
+        content = content.replace(
+          /(\r?\n|<br ?\/?>)\s*(\r?\n|<br ?\/?>)\s*/g,
+          "<p>"
+        );
+        if (!content.startsWith("<p")) content = "<p>" + content;
+        return content;
+      }
+
+      function getDepthColor(depth) {
+        let hue = (depth % 8) * (360 / 8);
+        return `hsl(${hue} 90% 45%)`;
+      }
+
+      function pluralizeCount(count, label) {
+        if (count === 1) return count + " " + label;
+        else if (label.endsWith("y"))
+          return count + " " + label.slice(0, -1) + "ies";
+        else return count + " " + label + "s";
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <form>
+        <input
+          type="text"
+          name="url"
+          size="30"
+          placeholder="Post URL from your instance"
+        />
+        <input type="submit" value="Open post" />
+      </form>
+      <p>
+        This is a minimalist Mastodon interface, intended for reading
+        deeply-nested threads with lots of replies.
+      </p>
+      <p>
+        Right now, it only works for
+        <a href="https://lor.sh">lor.sh</a> accounts.
+      </p>
+    </main>
+  </body>
+</html>
