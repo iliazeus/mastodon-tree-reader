@@ -105,7 +105,7 @@
         if (!postUrl) return;
         postUrl = new URL(postUrl);
 
-        let baseUrl = new URL(postUrl.origin);
+        let baseUrl = new URL("https://lor.sh"); // TODO
         let code = params.get("code");
         let token = JSON.parse(
           localStorage.getItem("token:" + baseUrl) ?? "null"
@@ -181,8 +181,6 @@
         async function fetchAndRenderTree(token, postUrl, baseUrl) {
           document.querySelector("main").innerText = "Loading...";
 
-          let postId = postUrl.pathname.split("/").at(-1);
-
           let get = async (path) => {
             let url = new URL(path, baseUrl);
             let response = await fetch(url, {
@@ -192,10 +190,20 @@
             return await response.json();
           };
 
-          let [requestedPost, postContext] = await Promise.all([
-            get(`/api/v1/statuses/${postId}`),
-            get(`/api/v1/statuses/${postId}/context`),
-          ]);
+          let postSearchQuery = new URLSearchParams({
+            type: "statuses",
+            resolve: true,
+            limit: 1,
+            q: postUrl,
+          });
+
+          let postSearchResult = await get(`api/v2/search?${postSearchQuery}`);
+          let requestedPost = postSearchResult.statuses[0];
+          if (!requestedPost) return; // TODO
+
+          let postContext = await get(
+            `/api/v1/statuses/${requestedPost.id}/context`
+          );
 
           let posts = new Map();
           posts.set(requestedPost.id, requestedPost);
