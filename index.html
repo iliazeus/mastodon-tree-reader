@@ -43,6 +43,7 @@
       .post > summary > .content {
         display: none;
         margin: 4px 8px;
+        overflow-wrap: break-word;
       }
       .post[open] > summary > .content {
         display: block;
@@ -58,6 +59,7 @@
       .post > summary > .attachments {
         display: none;
         margin-left: 8px;
+        overflow-wrap: break-word;
       }
       .post[open] > summary > .attachments {
         display: block;
@@ -172,7 +174,6 @@
           } else if (a) {
             a.setAttribute("open", "");
             e.preventDefault();
-            e.stopPropagation();
           }
         });
 

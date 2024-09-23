@@ -1,6 +1,7 @@
 package lol.iliazeus.treeder;
 
 import java.net.URI;
+import java.util.regex.*;
 
 import android.app.*;
 import android.content.Intent;
@@ -27,28 +28,29 @@ public class MainActivity extends Activity {
     super.onCreate(savedInstanceState);
     getActionBar().hide();
 
-    String postUrl = null;
-    if (getIntent().getAction() == Intent.ACTION_SEND) {
-      postUrl = getIntent().getStringExtra(Intent.EXTRA_TEXT);
-    }
-
     if (_views == null) {
       _views = new FrameLayout(this);
       setContentView(_views);
     }
 
+    onNewIntent(getIntent());
+  }
+
+  protected void onNewIntent(Intent intent) {
     Uri.Builder url = Uri.parse("https://appassets.androidplatform.net/assets/index.html").buildUpon();
 
     if (_wv == null) {
       _wv = _createWebView();
       _views.addView(_wv);
-      _wv.loadUrl(url.toString());
+      if (intent.getAction() == Intent.ACTION_MAIN)
+        _wv.loadUrl(url.toString());
     }
 
-    if (getIntent().getAction() == Intent.ACTION_SEND) {
-      url.appendQueryParameter("url", getIntent().getStringExtra(Intent.EXTRA_TEXT));
+    if (intent.getAction() == Intent.ACTION_SEND) {
+      String postUrl = _findUrl(intent.getStringExtra(Intent.EXTRA_TEXT));
+      if (postUrl != null)
+        url.appendQueryParameter("url", postUrl);
       _wv.loadUrl(url.toString());
-      _wv.clearHistory();
     }
   }
 
@@ -64,6 +66,8 @@ public class MainActivity extends Activity {
   private WebView _createWebView() {
     WebView wv = new WebView(this);
 
+    wv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
     WebSettings settings = wv.getSettings();
     settings.setAllowContentAccess(false);
     settings.setAllowFileAccess(false);
@@ -78,11 +82,9 @@ public class MainActivity extends Activity {
 
   private WebViewClient _webViewClient = new WebViewClient() {
     WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
-        .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(MainActivity.this))
-        .build();
+        .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(MainActivity.this)).build();
 
-    public WebResourceResponse shouldInterceptRequest(WebView wv,
-        WebResourceRequest rq) {
+    public WebResourceResponse shouldInterceptRequest(WebView wv, WebResourceRequest rq) {
       return assetLoader.shouldInterceptRequest(rq.getUrl());
     }
 
@@ -126,14 +128,24 @@ public class MainActivity extends Activity {
   };
 
   public boolean onKeyDown(int keyCode, KeyEvent event) {
-    if (keyCode == KeyEvent.KEYCODE_BACK) {
-      WebView wv = (WebView) _views.getFocusedChild();
-      if (wv != null && wv.canGoBack()) {
-        wv.goBack();
-        return true;
-      }
+    if (keyCode == KeyEvent.KEYCODE_BACK && _wv.canGoBack()) {
+      _wv.goBack();
+      return true;
     }
 
     return super.onKeyDown(keyCode, event);
+  }
+
+  // https://mathiasbynens.be/demo/url-regex
+  private static final Pattern URL_PATTERN = Pattern.compile(
+      "https?://[^\\s/$.?#].[^\\s]*", Pattern.CASE_INSENSITIVE);
+
+  private String _findUrl(String input) {
+    if (input == null)
+      return null;
+    Matcher matcher = URL_PATTERN.matcher(input);
+    if (matcher.find())
+      return matcher.group();
+    return null;
   }
 }
