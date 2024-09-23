@@ -1,0 +1,30 @@
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.5.2"
+  }
+}
+
+repositories {
+  google()
+}
+
+apply plugin: "com.android.application"
+
+android {
+  namespace "lol.iliazeus.treeder"
+
+  compileSdkVersion 33
+
+  defaultConfig {
+    minSdkVersion 33
+    targetSdk 33
+  }
+
+  dependencies {
+    implementation "androidx.webkit:webkit:1.7.0"
+  }
+}

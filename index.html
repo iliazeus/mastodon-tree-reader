@@ -95,7 +95,7 @@
         let params = new URLSearchParams(window.location.search);
 
         if (params.get("logout")) {
-          sessionStorage.removeItem("token:" + params.get("logout"));
+          localStorage.removeItem("token:" + params.get("logout"));
           let newUrl = new URL(window.location);
           newUrl.searchParams.delete("logout");
           window.history.replaceState(null, "", newUrl);
@@ -108,7 +108,7 @@
         let baseUrl = new URL(postUrl.origin);
         let code = params.get("code");
         let token = JSON.parse(
-          sessionStorage.getItem("token:" + baseUrl) ?? "null"
+          localStorage.getItem("token:" + baseUrl) ?? "null"
         );
 
         if (!token && !code) {
@@ -143,7 +143,7 @@
           });
           if (!response.ok) throw new Error(await response.text());
           token = await response.text();
-          sessionStorage.setItem("token:" + baseUrl, token);
+          localStorage.setItem("token:" + baseUrl, token);
           let newUrl = new URL(window.location);
           newUrl.searchParams.delete("code");
           window.history.replaceState(null, "", newUrl);
@@ -172,12 +172,15 @@
           } else if (a) {
             a.setAttribute("open", "");
             e.preventDefault();
+            e.stopPropagation();
           }
         });
 
         fetchAndRenderTree(token.access_token, postUrl, baseUrl);
 
         async function fetchAndRenderTree(token, postUrl, baseUrl) {
+          document.querySelector("main").innerText = "Loading...";
+
           let postId = postUrl.pathname.split("/").at(-1);
 
           let get = async (path) => {
