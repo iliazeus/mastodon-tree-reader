@@ -26,6 +26,7 @@
         let logInForm = toolbar.querySelector("form#logIn");
         let logOutButton = toolbar.querySelector("button#logOut");
         let loadPostForm = toolbar.querySelector("form#loadPost");
+        let loadRootButton = toolbar.querySelector("button#loadRoot");
 
         let container = document.querySelector("#container");
 
@@ -54,6 +55,12 @@
           if (formsLocked) return;
           postUrl = loadPostForm.elements.postUrl.value.trim();
           loadPost();
+        });
+
+        loadRootButton.addEventListener("click", (e) => {
+          if (formsLocked) return;
+          postUrl ??= loadPostForm.elements.postUrl.value.trim();
+          loadPost({ loadRoot: true });
         });
 
         updateToolbar();
@@ -96,7 +103,7 @@
           }
         }
 
-        async function loadPost() {
+        async function loadPost({ loadRoot = false } = {}) {
           if (!instanceHost) return setStatus(`Please log in first`);
 
           if (instanceHost && !api.isLoggedIn({ instanceHost }))
@@ -104,14 +111,18 @@
 
           try {
             lockToolbar(true);
-            loadPostForm.style.display = "none";
             setStatus("Loading post...");
 
             let p = await api.fetchPostByUrl(postUrl, { instanceHost });
+            if (loadRoot && p.in_reply_to_id)
+              p = await api.fetchRootPostOfThread(p, { instanceHost });
             postTree = await api.fetchPostTree(p, { instanceHost });
+
             setStatus(null);
             loadPostForm.elements.postUrl.value = "";
+            loadRootButton.disabled = !postTree.in_reply_to_id;
             updateToolbar();
+
             renderTree();
           } catch (e) {
             setStatus(`Error loading post: ${e.message}`);
@@ -192,12 +203,15 @@
           </label>
           <input type="submit" value="Log in" />
         </form>
-        <form class="if-logged-in" id="loadPost" style="display: none">
-          <input type="text" name="postUrl" size="30" placeholder="Post URL" />
-          <input type="submit" value="View post" />
-        </form>
         <button class="if-logged-in" id="logOut" style="display: none">
           Log out
+        </button>
+        <form class="if-logged-in" id="loadPost" style="display: none">
+          <input type="text" name="postUrl" size="30" placeholder="Post URL" />
+          <input type="submit" value="Load post" />
+        </form>
+        <button class="if-logged-in" id="loadRoot" style="display: none">
+          Load root
         </button>
         <div id="status" style="display: none"></div>
       </div>
