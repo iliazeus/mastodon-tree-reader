@@ -13,6 +13,7 @@ export function setUp() {
     });
   }
 
+  // suppport "long tap" gesture to open action menu
   document.addEventListener("contextmenu", (e) => {
     let a = e.target.closest(".post > summary")?.querySelector(".actions");
     if (a && a.hasAttribute("open")) {
@@ -86,6 +87,7 @@ function renderPostTree(post, { instanceUrl, depth = 0 }) {
           ${processContent(post.content)}
           ${post.spoiler_text && `</details>`}
         </div>
+        ${renderPoll(post.poll)}
         ${renderAttachments(post.media_attachments)}
         <details class="actions">
           <summary></summary>
@@ -108,10 +110,18 @@ function renderPostTree(post, { instanceUrl, depth = 0 }) {
 function renderAttachments(atts) {
   if (!atts || atts.length === 0) return "";
 
-  // prettier-ignore
   atts = atts.map((a) => {
-    if (a.type === "image") return `<a title="${a.description ?? ''}" target="_blank" href="${a.url}"><img src="${a.preview_url}" alt="${a.description ?? ''}" /></a>`;
-    return `<a href="${a.url}">${a.url}</a>`;
+    switch (a.type) {
+      case "image":
+      case "video":
+      case "gifv":
+        // prettier-ignore
+        return `<a title="${a.description ?? ''}" target="_blank" href="${a.url}"><img src="${a.preview_url}" alt="${a.description ?? ''}" /></a>`;
+      case "audio":
+        return `<audio title="${a.description}" controls src="${a.url}"></audio>`;
+      default:
+        return `<a href="${a.url}">${a.url}</a>`;
+    }
   });
 
   // prettier-ignore
@@ -123,6 +133,26 @@ function renderAttachments(atts) {
   `;
 }
 
+function renderPoll(poll) {
+  if (!poll) return "";
+
+  // prettier-ignore
+  let options = poll.options.map((opt) => `
+    <div class="option">
+      <label>
+        <progress value="${opt.votes_count}" max="${poll.voters_count ?? poll.votes_count}"></progress>
+        ${opt.votes_count} / ${poll.voters_count ?? poll.votes_count} - ${opt.title}
+      </label>
+    </div>
+  `);
+
+  return `
+    <div class="poll">
+      ${options.join("\n")}
+    </div>
+  `;
+}
+
 function processContent(content) {
   content = content.replace(/(\r?\n|<br ?\/?>)\s*(\r?\n|<br ?\/?>)\s*/g, "<p>");
   if (!content.startsWith("<p")) content = "<p>" + content;
@@ -130,8 +160,12 @@ function processContent(content) {
 }
 
 function getDepthColor(depth) {
-  let hue = (depth % 8) * (360 / 8);
-  return `hsl(${hue} 90% 45%)`;
+  let i = depth % 8;
+  let hue = i * (360 / 8);
+  if (i === 2) hue -= 20;
+  let sat = 90 - i * 3;
+  let lit = 45 + i * 2;
+  return `hsl(${hue} ${sat}% ${lit}%)`;
 }
 
 function pluralizeCount(count, label) {

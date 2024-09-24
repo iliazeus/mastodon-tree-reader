@@ -55,6 +55,10 @@ main > form {
   margin-top: 4px;
   margin-bottom: 4px;
 }
+.post > summary > .poll {
+  margin-left: 8px;
+  overflow-wrap: break-word;
+}
 .post > summary > .attachments {
   display: none;
   margin-left: 8px;

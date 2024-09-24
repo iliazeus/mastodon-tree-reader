@@ -9,12 +9,12 @@
     <script type="module">
       import * as storage from "./storage.js";
       import * as api from "./api.js";
-      import * as view from "./view.js";
+      import * as template from "./template.js";
 
       window.addEventListener("load", async () => {
         storage.setUp();
         api.setUp();
-        view.setUp();
+        template.setUp();
 
         let location = new URL(window.location);
 
@@ -150,10 +150,10 @@
 
         function renderTree() {
           if (postTree != null) {
-            view.installPostTree(postTreeContainer, postTree, { instanceUrl });
+            template.installPostTree(postTreeContainer, postTree, { instanceUrl });
             postTreeContainer.style.display = "";
           } else {
-            view.uninstallPostTree(postTreeContainer);
+            template.uninstallPostTree(postTreeContainer);
             postTreeContainer.style.display = "none";
           }
         }
