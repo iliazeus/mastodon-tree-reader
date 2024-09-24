@@ -96,8 +96,6 @@ function renderPostTree(
         <details class="actions">
           <summary></summary>
           <a class="action_close" title="Close this panel" onclick="this.parentElement.removeAttribute('open')" href="javascript:">❎</a>
-          <a class="action_favourite" title="Like" href="javascript:">⭐</a>
-          <a class="action_reblog" title="Boost" href="javascript:">🚀</a>
           <a class="action_post" title="Reply" target="_blank" href="${postUrl}">🗨️</a>
           <a class="action_account" title="Open author's profile" target="_blank" href="${acctUrl}">🙂</a>
           <a class="action_remote_post" title="Open on their server" target="_blank" href="${post.url}">🔗🗨️</a>

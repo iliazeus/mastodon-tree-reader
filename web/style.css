@@ -3,16 +3,11 @@ img.emoji {
   max-height: 1em;
   vertical-align: baseline;
 }
-main > :not(#postTree) {
+main > #toolbar {
   margin: 5px;
 }
-main > form {
-  display: block;
-}
-.global_actions a {
-  font-size: 125%;
-  margin: 0.25em;
-  text-decoration: none;
+main > #toolbar form {
+  display: inline;
 }
 .post {
   margin: 0;

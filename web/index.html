@@ -18,12 +18,14 @@
 
         let location = new URL(window.location);
 
-        let statusElement = document.querySelector("#status");
-        let logInForm = document.querySelector("form#logIn");
-        let logOutForm = document.querySelector("form#logOut");
-        let loadPostForm = document.querySelector("form#loadPost");
+        let toolbar = document.querySelector("#toolbar");
+
+        let statusElement = toolbar.querySelector("#status");
+        let logInForm = toolbar.querySelector("form#logIn");
+        let logOutButton = toolbar.querySelector("button#logOut");
+        let loadPostForm = toolbar.querySelector("form#loadPost");
+
         let postTreeContainer = document.querySelector("#postTree");
-        let threadRootPrompt = document.querySelector("#threadRootPrompt");
 
         let formsLocked = false;
         let instanceHost = storage.getDefaultInstanceHost();
@@ -40,8 +42,7 @@
           logIn();
         });
 
-        logOutForm.addEventListener("submit", (e) => {
-          e.preventDefault();
+        logOutButton.addEventListener("click", (e) => {
           if (formsLocked) return;
           logOut();
         });
@@ -53,43 +54,43 @@
           loadPost();
         });
 
-        updateForms();
+        updateToolbar();
         if (postUrl) loadPost();
         return;
 
         async function logIn() {
           try {
-            lockForms(true);
+            lockToolbar(true);
             setStatus("Logging in...");
 
             await api.logIn({ instanceHost });
             setStatus(null);
-            updateForms();
+            updateToolbar();
           } catch (e) {
             setStatus(`Error logging in: ${e.message}`);
             throw e;
           } finally {
-            lockForms(false);
+            lockToolbar(false);
           }
         }
 
         async function logOut() {
           try {
-            lockForms(true);
+            lockToolbar(true);
             setStatus("Logging out...");
 
             postTree = null;
             renderTree();
-            updateForms();
+            updateToolbar();
 
             await api.logOut({ instanceHost });
-            updateForms();
+            updateToolbar();
             setStatus(null);
           } catch (e) {
             setStatus(`Error logging out: ${e.message}`);
             throw e;
           } finally {
-            lockForms(false);
+            lockToolbar(false);
           }
         }
 
@@ -100,21 +101,22 @@
             return logIn({ instanceHost });
 
           try {
-            lockForms(true);
+            lockToolbar(true);
             loadPostForm.style.display = "none";
             setStatus("Loading post...");
 
             let p = await api.fetchPostByUrl(postUrl, { instanceHost });
             postTree = await api.fetchPostTree(p, { instanceHost });
             setStatus(null);
-            updateForms();
+            loadPostForm.elements.postUrl.value = "";
+            updateToolbar();
             renderTree();
           } catch (e) {
             setStatus(`Error loading post: ${e.message}`);
-            updateForms();
+            updateToolbar();
             throw e;
           } finally {
-            lockForms(false);
+            lockToolbar(false);
           }
         }
 
@@ -128,26 +130,30 @@
           }
         }
 
-        function lockForms(yes) {
+        function lockToolbar(yes) {
           formsLocked = yes;
-          for (let f of [logInForm, logOutForm, loadPostForm])
+          for (let f of [logInForm, loadPostForm])
             for (let s of f.querySelectorAll("input[type=submit]"))
               s.disabled = yes;
+          logOutButton.disabled = yes;
         }
 
-        function updateForms() {
+        function updateToolbar() {
           if (instanceHost && api.isLoggedIn({ instanceHost })) {
-            logOutForm.elements.instanceHost.value = instanceHost;
-            logInForm.style.display = "none";
-            logOutForm.style.display = "";
-            loadPostForm.style.display = "";
+            toolbar
+              .querySelectorAll(".if-logged-in")
+              .forEach((e) => (e.style.display = ""));
+            toolbar
+              .querySelectorAll(".if-logged-out")
+              .forEach((e) => (e.style.display = "none"));
           } else {
-            logInForm.style.display = "";
-            logOutForm.style.display = "none";
-            loadPostForm.style.display = "none";
+            toolbar
+              .querySelectorAll(".if-logged-in")
+              .forEach((e) => (e.style.display = "none"));
+            toolbar
+              .querySelectorAll(".if-logged-out")
+              .forEach((e) => (e.style.display = ""));
           }
-
-          loadPostForm.elements.postUrl.value = postUrl ?? "";
         }
 
         function renderTree() {
@@ -170,40 +176,28 @@
       <noscript>
         This is a web app. It won't work without JavaScript being enabled.
       </noscript>
-      <form id="logIn" style="display: none">
-        <label>
-          Your instance URL:
-          <input
-            type="text"
-            name="instanceHost"
-            size="15"
-            value="lor.sh"
-            disabled
-          />
-        </label>
-        <input type="submit" value="Log in" />
-      </form>
-      <form id="logOut" style="display: none">
-        <label>
-          Logged into:
-          <input
-            type="text"
-            name="instanceHost"
-            size="15"
-            value="lor.sh"
-            disabled
-          />
-        </label>
-        <input type="submit" value="Log out" />
-      </form>
-      <form id="loadPost" style="display: none">
-        <input type="text" name="postUrl" size="30" placeholder="Post URL" />
-        <input type="submit" value="View post" />
-      </form>
-      <div id="status" style="display: none"></div>
-      <div id="threadRootPrompt" style="display: none">
-        You are viewing a subthread.
-        <button>View full thread</button>
+      <div id="toolbar">
+        <form class="if-logged-out" id="logIn" style="display: none">
+          <label>
+            Your instance:
+            <input
+              type="text"
+              name="instanceHost"
+              size="15"
+              value="lor.sh"
+              disabled
+            />
+          </label>
+          <input type="submit" value="Log in" />
+        </form>
+        <form class="if-logged-in" id="loadPost" style="display: none">
+          <input type="text" name="postUrl" size="30" placeholder="Post URL" />
+          <input type="submit" value="View post" />
+        </form>
+        <button class="if-logged-in" id="logOut" style="display: none">
+          Log out
+        </button>
+        <div id="status" style="display: none"></div>
       </div>
       <div id="postTree" style="display: none"></div>
     </main>
