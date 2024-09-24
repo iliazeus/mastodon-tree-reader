@@ -79,6 +79,8 @@ export async function fetchPostByUrl(url, { instanceHost }) {
 }
 
 export async function fetchRootPostOfThread(post, { instanceHost }) {
+  if (!post.in_reply_to_id) return post;
+
   let context = await get(`api/v1/statuses/${post.id}/context`, {
     instanceHost,
   });
@@ -87,15 +89,18 @@ export async function fetchRootPostOfThread(post, { instanceHost }) {
 }
 
 export async function fetchPostTree(post, { instanceHost }) {
-  post = { ...post };
-
-  let context = await get(`api/v1/statuses/${post.id}/context`, {
-    instanceHost,
-  });
-
   let posts = new Map();
   posts.set(post.id, post);
-  for (let p of context.descendants) posts.set(p.id, p);
+
+  if (post.replies_count > 0) {
+    let context = await get(`api/v1/statuses/${post.id}/context`, {
+      instanceHost,
+    });
+    post.ancestors = context.ancestors;
+    for (let p of context.descendants) posts.set(p.id, p);
+  } else {
+    post.ancestors = [];
+  }
 
   for (let p of posts.values()) {
     if (!p.replies) p.replies = [];
@@ -130,7 +135,17 @@ async function get(path, { instanceHost }) {
   if (token) headers.authorization = `Bearer ${token.access_token}`;
 
   let response = await fetch(url, { headers });
+
+  if (response.status === 429) {
+    await sleep(1000);
+    return await get(path, { instanceHost });
+  }
+
   let json = await response.json();
   if (!response.ok) throw new Error(json.error);
   return json;
+}
+
+function sleep(ms) {
+  return new Promise((cb) => setTimeout(cb, ms));
 }
