@@ -88,7 +88,7 @@ export async function fetchRootPostOfThread(post, { instanceHost }) {
   return context.ancestors[0] ?? post;
 }
 
-export async function fetchPostTree(post, { instanceHost }) {
+export async function fetchPostTree(post, { instanceHost, markViewed = true }) {
   let posts = new Map();
   posts.set(post.id, post);
 
@@ -119,9 +119,87 @@ export async function fetchPostTree(post, { instanceHost }) {
     p.viewed = new Date(postViews[p.id]) >= postDate;
     newPostViews[p.id] = now;
   }
-  storage.addPostViews(instanceHost, newPostViews);
+
+  if (markViewed) storage.addPostViews(instanceHost, newPostViews);
 
   return post;
+}
+
+function* walkPostTree(tree) {
+  yield tree;
+  for (let r in tree.replies) yield* walkPostTree(r);
+}
+
+export async function* fetchTimeline(name, { instanceHost, limit = 1000 }) {
+  let query = new URLSearchParams({ limit: 40 });
+  let count = 0;
+
+  while (count < limit) {
+    let page = await get(`api/v1/timelines/${name}?${query}`, { instanceHost });
+    if (page.length === 0) return;
+
+    yield* page;
+
+    query.set("max_id", page.at(-1).id);
+    count += page.length;
+  }
+}
+
+export async function recapTimeline(timeline, { instanceHost }) {
+  let trees = new Map();
+  let postsToTrees = new Map();
+
+  for await (let post of timeline) {
+    timeline.push(post);
+
+    if (post.reblog) {
+      let treeId = postsToTrees.get(post.reblog.id);
+      if (treeId) {
+        let tree = trees.get(treeId);
+        tree.interactions.push({ type: "replyReblog", post });
+      } else {
+        let root = await fetchRootPostOfThread(post.reblog, { instanceHost });
+        let tree = await fetchPostTree(root, {
+          instanceHost,
+          markViewed: false,
+        });
+
+        trees.set(tree.id, tree);
+        for (let p of walkPostTree(tree)) postsToTrees.set(p.id, tree.id);
+
+        tree.interactions = [];
+        if (post.reblog.id === tree.id) {
+          tree.interactions.push({ type: "reblog", post });
+        } else {
+          tree.interactions.push({ type: "replyReblog", post });
+        }
+      }
+    } else {
+      let treeId = postsToTrees.get(post.id);
+      if (treeId) {
+        let tree = trees.get(treeId);
+        tree.interactions.push({ type: "reply", post });
+      } else {
+        let root = await fetchRootPostOfThread(post, { instanceHost });
+        let tree = await fetchPostTree(root, {
+          instanceHost,
+          markViewed: false,
+        });
+
+        trees.set(tree.id, tree);
+        for (let p of walkPostTree(tree)) postsToTrees.set(p.id, tree.id);
+
+        tree.interactions = [];
+        if (post.id === tree.id) {
+          tree.interactions.push({ type: "root", post });
+        } else {
+          tree.interactions.push({ type: "reply", post });
+        }
+      }
+    }
+  }
+
+  return [...trees.values()];
 }
 
 const CLIENT_ID = "CIJFrOR_hvQC0hjR8VGer2a7mEquYYzswH8UmcDsRrE";

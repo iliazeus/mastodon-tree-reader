@@ -11,6 +11,8 @@
       import * as api from "./api.js";
       import * as template from "./template.js";
 
+      globalThis.api = api;
+
       window.addEventListener("load", async () => {
         storage.setUp();
         api.setUp();
@@ -25,7 +27,7 @@
         let logOutButton = toolbar.querySelector("button#logOut");
         let loadPostForm = toolbar.querySelector("form#loadPost");
 
-        let postTreeContainer = document.querySelector("#postTree");
+        let container = document.querySelector("#container");
 
         let formsLocked = false;
         let instanceHost = storage.getDefaultInstanceHost();
@@ -159,13 +161,13 @@
         function renderTree() {
           if (postTree != null) {
             console.log(postTree);
-            template.installPostTree(postTreeContainer, postTree, {
+            template.installPostTree(container, postTree, {
               instanceHost,
             });
-            postTreeContainer.style.display = "";
+            container.style.display = "";
           } else {
-            template.uninstallPostTree(postTreeContainer);
-            postTreeContainer.style.display = "none";
+            template.uninstallPostTree(container);
+            container.style.display = "none";
           }
         }
       });
@@ -199,7 +201,7 @@
         </button>
         <div id="status" style="display: none"></div>
       </div>
-      <div id="postTree" style="display: none"></div>
+      <div id="container" style="display: none"></div>
     </main>
   </body>
 </html>

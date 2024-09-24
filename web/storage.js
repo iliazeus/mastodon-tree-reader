@@ -79,3 +79,8 @@ export function addPostViews(host, views) {
 export function getPostViews(host) {
   return { ...getOrCreateInstance(host).postViews };
 }
+
+export function clearPostViews(host) {
+  getDefaultInstanceHost(host).postViews = {};
+  save();
+}
