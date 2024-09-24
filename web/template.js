@@ -88,7 +88,7 @@ function renderPostTree(
           </div>
         <div class="content">
           ${post.spoiler_text && `<details><summary>${post.spoiler_text}</summary>`}
-          ${processContent(post.content)}
+          ${processContent(post)}
           ${post.spoiler_text && `</details>`}
         </div>
         ${renderPoll(post.poll)}
@@ -157,9 +157,19 @@ function renderPoll(poll) {
   `;
 }
 
-function processContent(content) {
+function processContent(post) {
+  let content = post.content;
+
   content = content.replace(/(\r?\n|<br ?\/?>)\s*(\r?\n|<br ?\/?>)\s*/g, "<p>");
   if (!content.startsWith("<p")) content = "<p>" + content;
+
+  for (let emoji of post.emojis) {
+    content = content.replaceAll(
+      ":" + emoji.shortcode + ":",
+      `<img class="emoji" title=":${emoji.shortcode}:" src="${emoji.static_url}" />`
+    );
+  }
+
   return content;
 }
 

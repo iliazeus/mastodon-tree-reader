@@ -1,4 +1,9 @@
-main > * {
+img.emoji {
+  max-width: 1em;
+  max-height: 1em;
+  vertical-align: baseline;
+}
+main > :not(#postTree) {
   margin: 5px;
 }
 main > form {
