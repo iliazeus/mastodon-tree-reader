@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+    <title>Treeder</title>
+
+    <script type="module">
+      import * as storage from "./storage.js";
+      import * as api from "./api.js";
+      import * as view from "./view.js";
+
+      window.addEventListener("load", async () => {
+        storage.setUp();
+        api.setUp();
+        view.setUp();
+
+        let location = new URL(window.location);
+
+        let statusElement = document.querySelector("#status");
+        let logInForm = document.querySelector("form#logIn");
+        let logOutForm = document.querySelector("form#logOut");
+        let loadPostForm = document.querySelector("form#loadPost");
+        let postTreeContainer = document.querySelector("#postTree");
+        let threadRootPrompt = document.querySelector("#threadRootPrompt");
+
+        let formsLocked = false;
+        let instanceUrl = storage.getDefaultInstanceUrl();
+        let postUrl = location.searchParams.get("post");
+        let postTree = null;
+
+        logInForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (formsLocked) return;
+          instanceUrl = logInForm.elements.instanceUrl.value.trim();
+          if (!instanceUrl.startsWith("http"))
+            instanceUrl = "https://" + instanceUrl;
+          logIn();
+        });
+
+        logOutForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (formsLocked) return;
+          logOut();
+        });
+
+        loadPostForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (formsLocked) return;
+          postUrl = loadPostForm.elements.postUrl.value.trim();
+          loadPost();
+        });
+
+        updateFormVisibility();
+        if (postUrl) loadPost();
+        return;
+
+        async function logIn() {
+          try {
+            lockForms(true);
+            setStatus("Logging in...");
+
+            await api.logIn({ instanceUrl });
+            setStatus(null);
+            updateFormVisibility();
+          } catch (e) {
+            setStatus(`Error logging in: ${e.message}`);
+            throw e;
+          } finally {
+            lockForms(false);
+          }
+
+          if (postUrl) await loadPost();
+        }
+
+        async function logOut() {
+          try {
+            lockForms(true);
+            setStatus("Logging out...");
+
+            postTree = null;
+            renderTree();
+            updateFormVisibility();
+
+            await api.logOut({ instanceUrl });
+            updateFormVisibility();
+            setStatus(null);
+          } catch (e) {
+            setStatus(`Error logging out: ${e.message}`);
+            throw e;
+          } finally {
+            lockForms(false);
+          }
+        }
+
+        async function loadPost() {
+          try {
+            lockForms(true);
+            loadPostForm.style.display = "none";
+            setStatus("Loading post...");
+
+            let p = await api.fetchPostByUrl(postUrl, { instanceUrl });
+            postTree = await api.fetchPostTree(p, { instanceUrl });
+            setStatus(null);
+            updateFormVisibility();
+            renderTree();
+          } catch (e) {
+            setStatus(`Error loading post: ${e.message}`);
+            updateFormVisibility();
+            throw e;
+          } finally {
+            lockForms(false);
+          }
+        }
+
+        function setStatus(s) {
+          if (s != null) {
+            statusElement.innerText = s;
+            statusElement.style.display = "";
+          } else {
+            statusElement.innerText = "";
+            statusElement.style.display = "none";
+          }
+        }
+
+        function lockForms(yes) {
+          formsLocked = yes;
+          for (let f of [logInForm, logOutForm, loadPostForm])
+            for (let s of f.querySelectorAll("input[type=submit]"))
+              s.disabled = yes;
+        }
+
+        function updateFormVisibility() {
+          if (postTree != null) {
+            loadPostForm.style.display = "none";
+          } else {
+            loadPostForm.style.display = "";
+          }
+
+          if (api.isLoggedIn({ instanceUrl })) {
+            logOutForm.elements.instanceUrl.value = instanceUrl;
+            logInForm.style.display = "none";
+            logOutForm.style.display = "";
+          } else {
+            logInForm.style.display = "";
+            logOutForm.style.display = "none";
+          }
+        }
+
+        function renderTree() {
+          if (postTree != null) {
+            view.installPostTree(postTreeContainer, postTree, { instanceUrl });
+            postTreeContainer.style.display = "";
+          } else {
+            view.uninstallPostTree(postTreeContainer);
+            postTreeContainer.style.display = "none";
+          }
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <noscript>
+        This is a web app. It won't work without JavaScript being enabled.
+      </noscript>
+      <form id="logIn" style="display: none">
+        <label>
+          Your instance URL:
+          <input
+            type="text"
+            name="instanceUrl"
+            size="15"
+            value="lor.sh"
+            disabled
+          />
+        </label>
+        <input type="submit" value="Log in" />
+      </form>
+      <form id="logOut" style="display: none">
+        <label>
+          Logged into:
+          <input
+            type="text"
+            name="instanceUrl"
+            size="15"
+            value="lor.sh"
+            disabled
+          />
+        </label>
+        <input type="submit" value="Log out" />
+      </form>
+      <form id="loadPost" style="display: none">
+        <input type="text" name="postUrl" size="30" placeholder="Post URL" />
+        <input type="submit" value="Load" />
+      </form>
+      <div id="status" style="display: none"></div>
+      <div id="threadRootPrompt" style="display: none">
+        You are viewing a subthread.
+        <button>View full thread</button>
+      </div>
+      <div id="postTree" style="display: none"></div>
+    </main>
+  </body>
+</html>

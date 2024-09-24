@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
     if (intent.getAction() == Intent.ACTION_SEND) {
       String postUrl = _findUrl(intent.getStringExtra(Intent.EXTRA_TEXT));
       if (postUrl != null)
-        url.appendQueryParameter("url", postUrl);
+        url.appendQueryParameter("post", postUrl);
       _wv.loadUrl(url.toString());
     }
   }
@@ -103,6 +103,10 @@ public class MainActivity extends Activity {
       }
 
       return false;
+    }
+
+    public void onPageStarted(WebView wv, String url, android.graphics.Bitmap favicon) {
+      wv.clearHistory();
     }
   };
 

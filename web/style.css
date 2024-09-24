@@ -1,0 +1,91 @@
+main > * {
+  margin: 5px;
+}
+main > form {
+  display: block;
+}
+.global_actions a {
+  font-size: 125%;
+  margin: 0.25em;
+  text-decoration: none;
+}
+.post {
+  margin: 0;
+  padding: 0;
+}
+.post > summary {
+  display: block;
+  border: 1px solid #ccc;
+  border-left: 4px solid;
+  max-width: 50em;
+}
+@media (max-width: 50em) {
+  .post > summary {
+    min-width: 80vw;
+  }
+}
+.post > summary > .header {
+  margin: 4px;
+  font-size: smaller;
+  white-space: nowrap;
+  overflow-x: scroll;
+}
+.post > summary > .header > .avatar {
+  float: left;
+  margin-right: 0.5em;
+  width: 2lh;
+  height: 2lh;
+}
+.post > summary > .header > a {
+  text-decoration: none;
+}
+.post > summary > .content {
+  display: none;
+  margin: 4px 8px;
+  overflow-wrap: break-word;
+}
+.post[open] > summary > .content {
+  display: block;
+}
+.post > summary > .content details > summary {
+  cursor: pointer;
+}
+.post > summary > .content p,
+.post > summary > .content blockquote {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.post > summary > .attachments {
+  display: none;
+  margin-left: 8px;
+  overflow-wrap: break-word;
+}
+.post[open] > summary > .attachments {
+  display: block;
+}
+.post > summary > .attachments > summary {
+  cursor: pointer;
+}
+.post > summary > .attachments img {
+  max-width: 64px;
+  max-height: 64px;
+}
+.post > summary > .actions {
+  display: none;
+  margin: 12px 8px 2px 8px;
+  overflow-x: scroll;
+}
+.post[open] > summary > .actions {
+  display: block;
+}
+.post > summary > .actions > summary {
+  display: none;
+}
+.post > summary > .actions > a {
+  font-size: 125%;
+  margin: 0.25em;
+  text-decoration: none;
+}
+.post > .replies {
+  margin-left: 4px;
+}
