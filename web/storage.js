@@ -1,56 +1,81 @@
-let tokens = new Map();
+let storage = {};
 let pendingTokens = new Map();
-
-let defaultInstance = "";
 
 export function setUp() {
   load();
 }
 
 function load() {
-  let json = window.localStorage.getItem("treeder/v1");
-  if (json) json = JSON.parse(json);
-  else {
-    json = { tokens: {}, defaultInstance: null };
-    window.localStorage.setItem("treeder/v1", JSON.stringify(json));
+  storage = window.localStorage.getItem("treeder/v2");
+  if (storage) {
+    storage = JSON.parse(storage);
+    return;
   }
 
-  tokens = new Map(Object.entries(json.tokens));
-  defaultInstance = json.defaultInstance;
+  storage = window.localStorage.getItem("treeder/v1");
+  if (storage) {
+    storage = JSON.parse(storage);
+
+    storage.instances = {};
+    for (let key in storage.tokens) {
+      let instance = getOrCreateInstance(key);
+      instance.token = storage.tokens[key];
+    }
+    delete storage.tokens;
+
+    window.localStorage.removeItem("treeder/v1");
+    save();
+    return;
+  }
+
+  storage = {
+    defaultInstance: null,
+    instances: {},
+  };
+  save();
 }
 
 function save() {
-  let json = { tokens: Object.fromEntries(tokens), defaultInstance };
-  window.localStorage.setItem("treeder/v1", JSON.stringify(json));
+  window.localStorage.setItem("treeder/v2", JSON.stringify(storage));
 }
 
-export function setToken(instanceUrl, token) {
-  let host = new URL(instanceUrl).host;
+function getOrCreateInstance(host) {
+  storage.instances[host] ??= { postViews: {} };
+  return storage.instances[host];
+}
 
+export function setToken(host, token) {
   token = Promise.resolve(token);
   pendingTokens.set(host, token);
-  defaultInstance = host;
+  storage.defaultInstance = host;
 
   token.then((t) => {
     pendingTokens.delete(host);
-    tokens.set(host, t);
+    getOrCreateInstance(host).token = t;
     save();
   });
 }
 
-export function getToken(instanceUrl) {
-  let host = new URL(instanceUrl).host;
-  return pendingTokens.get(host) ?? tokens.get(host);
+export function getToken(host) {
+  return pendingTokens.get(host) ?? getOrCreateInstance(host).token;
 }
 
-export function deleteToken(instanceUrl) {
-  let host = new URL(instanceUrl).host;
+export function deleteToken(host) {
   pendingTokens.delete(host);
-  tokens.delete(host);
-  if (defaultInstance === host) defaultInstance = null;
+  delete getOrCreateInstance(host).token;
   save();
 }
 
-export function getDefaultInstanceUrl() {
-  return new URL("https://" + defaultInstance);
+export function getDefaultInstanceHost() {
+  return storage.defaultInstance;
+}
+
+export function addPostViews(host, views) {
+  let instance = getOrCreateInstance(host);
+  Object.assign(instance.postViews, views);
+  save();
+}
+
+export function getPostViews(host) {
+  return { ...getOrCreateInstance(host).postViews };
 }

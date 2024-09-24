@@ -24,6 +24,14 @@ main > form {
     min-width: 80vw;
   }
 }
+.post.post-new > summary {
+  background-color: #ddf;
+}
+@media (prefers-color-scheme: dark) {
+  .post.post-new > summary {
+    background-color: #44a;
+  }
+}
 .post > summary > .header {
   margin: 4px;
   font-size: smaller;

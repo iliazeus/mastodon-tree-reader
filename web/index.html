@@ -26,16 +26,17 @@
         let threadRootPrompt = document.querySelector("#threadRootPrompt");
 
         let formsLocked = false;
-        let instanceUrl = storage.getDefaultInstanceUrl();
+        let instanceHost = storage.getDefaultInstanceHost();
         let postUrl = location.searchParams.get("post");
         let postTree = null;
 
         logInForm.addEventListener("submit", (e) => {
           e.preventDefault();
           if (formsLocked) return;
-          instanceUrl = logInForm.elements.instanceUrl.value.trim();
-          if (!instanceUrl.startsWith("http"))
-            instanceUrl = "https://" + instanceUrl;
+          instanceHost = logInForm.elements.instanceHost.value.trim();
+          try {
+            instanceHost = new URL(instanceHost).host;
+          } catch {}
           logIn();
         });
 
@@ -52,7 +53,7 @@
           loadPost();
         });
 
-        updateFormVisibility();
+        updateForms();
         if (postUrl) loadPost();
         return;
 
@@ -61,17 +62,15 @@
             lockForms(true);
             setStatus("Logging in...");
 
-            await api.logIn({ instanceUrl });
+            await api.logIn({ instanceHost });
             setStatus(null);
-            updateFormVisibility();
+            updateForms();
           } catch (e) {
             setStatus(`Error logging in: ${e.message}`);
             throw e;
           } finally {
             lockForms(false);
           }
-
-          if (postUrl) await loadPost();
         }
 
         async function logOut() {
@@ -81,10 +80,10 @@
 
             postTree = null;
             renderTree();
-            updateFormVisibility();
+            updateForms();
 
-            await api.logOut({ instanceUrl });
-            updateFormVisibility();
+            await api.logOut({ instanceHost });
+            updateForms();
             setStatus(null);
           } catch (e) {
             setStatus(`Error logging out: ${e.message}`);
@@ -95,19 +94,24 @@
         }
 
         async function loadPost() {
+          if (!instanceHost) return setStatus(`Please log in first`);
+
+          if (instanceHost && !api.isLoggedIn({ instanceHost }))
+            return logIn({ instanceHost });
+
           try {
             lockForms(true);
             loadPostForm.style.display = "none";
             setStatus("Loading post...");
 
-            let p = await api.fetchPostByUrl(postUrl, { instanceUrl });
-            postTree = await api.fetchPostTree(p, { instanceUrl });
+            let p = await api.fetchPostByUrl(postUrl, { instanceHost });
+            postTree = await api.fetchPostTree(p, { instanceHost });
             setStatus(null);
-            updateFormVisibility();
+            updateForms();
             renderTree();
           } catch (e) {
             setStatus(`Error loading post: ${e.message}`);
-            updateFormVisibility();
+            updateForms();
             throw e;
           } finally {
             lockForms(false);
@@ -131,26 +135,27 @@
               s.disabled = yes;
         }
 
-        function updateFormVisibility() {
-          if (postTree != null) {
-            loadPostForm.style.display = "none";
-          } else {
-            loadPostForm.style.display = "";
-          }
-
-          if (api.isLoggedIn({ instanceUrl })) {
-            logOutForm.elements.instanceUrl.value = instanceUrl;
+        function updateForms() {
+          if (instanceHost && api.isLoggedIn({ instanceHost })) {
+            logOutForm.elements.instanceHost.value = instanceHost;
             logInForm.style.display = "none";
             logOutForm.style.display = "";
+            loadPostForm.style.display = "";
           } else {
             logInForm.style.display = "";
             logOutForm.style.display = "none";
+            loadPostForm.style.display = "none";
           }
+
+          loadPostForm.elements.postUrl.value = postUrl ?? "";
         }
 
         function renderTree() {
           if (postTree != null) {
-            template.installPostTree(postTreeContainer, postTree, { instanceUrl });
+            console.log(postTree);
+            template.installPostTree(postTreeContainer, postTree, {
+              instanceHost,
+            });
             postTreeContainer.style.display = "";
           } else {
             template.uninstallPostTree(postTreeContainer);
@@ -170,7 +175,7 @@
           Your instance URL:
           <input
             type="text"
-            name="instanceUrl"
+            name="instanceHost"
             size="15"
             value="lor.sh"
             disabled
@@ -183,7 +188,7 @@
           Logged into:
           <input
             type="text"
-            name="instanceUrl"
+            name="instanceHost"
             size="15"
             value="lor.sh"
             disabled
@@ -193,7 +198,7 @@
       </form>
       <form id="loadPost" style="display: none">
         <input type="text" name="postUrl" size="30" placeholder="Post URL" />
-        <input type="submit" value="Load" />
+        <input type="submit" value="View post" />
       </form>
       <div id="status" style="display: none"></div>
       <div id="threadRootPrompt" style="display: none">

@@ -25,8 +25,8 @@ export function setUp() {
   });
 }
 
-export function installPostTree(container, postTree, { instanceUrl }) {
-  container.innerHTML = renderPostTree(postTree, { instanceUrl });
+export function installPostTree(container, postTree, { instanceHost }) {
+  container.innerHTML = renderPostTree(postTree, { instanceHost });
 
   container
     .querySelectorAll(".post > summary > .actions")
@@ -59,27 +59,31 @@ export function uninstallPostTree(container) {
   window.history.replaceState(null, "", location);
 }
 
-function renderPostTree(post, { instanceUrl, depth = 0 }) {
-  let acctUrl = new URL("@" + post.account.acct, instanceUrl);
-  let postUrl = new URL("@" + post.account.acct + "/" + post.id, instanceUrl);
+function renderPostTree(
+  post,
+  { instanceHost, depth = 0, rootPostViewed = post.viewed }
+) {
+  let acctUrl = `https://${instanceHost}/@${post.account.acct}`;
+  let postUrl = `${acctUrl}/${post.id}`;
+  let postNew = depth > 0 && rootPostViewed && !post.viewed;
 
   // prettier-ignore
   return `
-    <details open class="post" id="post_${post.id}">
+    <details open class="${postNew ? "post post-new" : "post"}" id="post_${post.id}">
       <summary title="Show/hide post" style="border-left-color: ${getDepthColor(depth)}">
         <div class="header">
           <img class="avatar" alt="Avatar of ${post.account.username}" src="${post.account.avatar_static}" />
-          <a class="username" title="Profile page of ${post.account.username} on ${instanceUrl.host}" rel="author" target="_blank" href="${acctUrl}">${post.account.username}</a>
-          <a class="acct" title="Profile page of ${post.account.username} on their server" rel="author" target="_blank" href="${post.account.url}">@${post.account.acct.includes('@') ? post.account.acct : `${post.account.acct}@${instanceUrl.host}`}</a>
+          <a class="username" title="Profile page of ${post.account.username} on ${instanceHost}" rel="author" target="_blank" href="${acctUrl}">${post.account.username}</a>
+          <a class="acct" title="Profile page of ${post.account.username} on their server" rel="author" target="_blank" href="${post.account.url}">@${post.account.acct.includes('@') ? post.account.acct : `${post.account.acct}@${instanceHost}`}</a>
           <br />
           ${post.visibility === "public" ? `<span class="visibility" title="Public">🌐</span>` : ''}
           ${post.visibility === "unlisted" ? `<span class="visibility" title="Unlisted">🔓</span>` : ''}
           ${post.visibility === "private" ? `<span class="visibility" title="Followers only">🔒</span>` : ''}
           ${post.visibility === "direct" ? `<span class="visibility" title="Direct">✉️</span>` : ''}
-          <a class="favourites_count" title="Open list of likes on ${instanceUrl.host}" target="_blank" href="${postUrl}/favourites">⭐${post.favourites_count}</a>
-          <a class="reblogs_count" title="Open list of boosts on ${instanceUrl.host}" target="_blank" href="${postUrl}/reblogs">🚀${post.reblogs_count}</a>
-          <a class="replies_count" title="Open replies on ${instanceUrl.host}" target="_blank" href="${postUrl}">🗨️${post.replies_count}</a>
-          <a class="created_at" title="Open post on ${instanceUrl.host}" rel="alternate" target="_blank" href="${postUrl}">${new Date(post.edited_at ?? post.created_at).toLocaleString()}</a>
+          <a class="favourites_count" title="Open list of likes on ${instanceHost}" target="_blank" href="${postUrl}/favourites">⭐${post.favourites_count}</a>
+          <a class="reblogs_count" title="Open list of boosts on ${instanceHost}" target="_blank" href="${postUrl}/reblogs">🚀${post.reblogs_count}</a>
+          <a class="replies_count" title="Open replies on ${instanceHost}" target="_blank" href="${postUrl}">🗨️${post.replies_count}</a>
+          <a class="created_at" title="Open post on ${instanceHost}" rel="alternate" target="_blank" href="${postUrl}">${new Date(post.edited_at ?? post.created_at).toLocaleString()}</a>
           ${post.edited_at ? `<span class="edited" title="Edited post">✏️</span>` : ''}
           </div>
         <div class="content">
@@ -101,7 +105,7 @@ function renderPostTree(post, { instanceUrl, depth = 0 }) {
         </details>
       </summary>
       <div class="replies">${
-        post.replies.map((reply) => renderPostTree(reply, { instanceUrl, depth: depth + 1 })).join('')
+        post.replies.map((reply) => renderPostTree(reply, { instanceHost, depth: depth + 1, rootPostViewed })).join('')
       }</div>
     </details>
   `;

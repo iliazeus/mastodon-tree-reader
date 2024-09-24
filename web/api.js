@@ -5,8 +5,8 @@ export function setUp() {
   checkLogInCallback();
 }
 
-export function isLoggedIn({ instanceUrl }) {
-  return storage.getToken(instanceUrl) != null;
+export function isLoggedIn({ instanceHost }) {
+  return storage.getToken(instanceHost) != null;
 }
 
 function checkLogInCallback() {
@@ -15,17 +15,20 @@ function checkLogInCallback() {
 
   let location = new URL(window.location);
   let code = location.searchParams.get("code");
-  let instanceUrl = location.searchParams.get("instanceUrl");
+  let instanceHost = location.searchParams.get("instance");
 
   location.searchParams.delete("code");
-  location.searchParams.delete("instanceUrl");
+  location.searchParams.delete("instance");
   window.history.replaceState("", null, location);
 
-  if (!code || !instanceUrl) return null;
-  storage.setToken(instanceUrl, fetchToken({ instanceUrl, code, redirectUri }));
+  if (!code || !instanceHost) return null;
+  storage.setToken(
+    instanceHost,
+    fetchToken({ instanceHost, code, redirectUri })
+  );
 }
 
-async function fetchToken({ instanceUrl, code, redirectUri }) {
+async function fetchToken({ instanceHost, code, redirectUri }) {
   let body = new FormData();
   body.set("grant_type", "authorization_code");
   body.set("code", code);
@@ -33,7 +36,7 @@ async function fetchToken({ instanceUrl, code, redirectUri }) {
   body.set("client_secret", CLIENT_SECRET);
   body.set("redirect_uri", redirectUri);
 
-  let response = await fetch(new URL("/oauth/token", instanceUrl), {
+  let response = await fetch(`https://${instanceHost}/oauth/token`, {
     method: "post",
     body,
   });
@@ -42,26 +45,26 @@ async function fetchToken({ instanceUrl, code, redirectUri }) {
   return await response.json();
 }
 
-export async function logIn({ instanceUrl }) {
-  if (new URL(instanceUrl).host !== "lor.sh")
-    throw new Error(`only implemented for lor.sh`);
+export async function logIn({ instanceHost }) {
+  if (instanceHost !== "lor.sh") throw new Error(`only implemented for lor.sh`);
 
   let redirectUri = new URL(window.location);
-  redirectUri.searchParams.set("instanceUrl", instanceUrl);
+  redirectUri.searchParams.set("instance", instanceHost);
 
   let query = new URLSearchParams({
     response_type: "code",
     client_id: CLIENT_ID,
     redirect_uri: redirectUri,
   });
-  window.location = new URL("/oauth/authorize?" + query, instanceUrl);
+
+  window.location = `https://${instanceHost}/oauth/authorize?${query}`;
 }
 
-export async function logOut({ instanceUrl }) {
-  storage.deleteToken(instanceUrl);
+export async function logOut({ instanceHost }) {
+  storage.deleteToken(instanceHost);
 }
 
-export async function fetchPostByUrl(url, { instanceUrl }) {
+export async function fetchPostByUrl(url, { instanceHost }) {
   let query = new URLSearchParams({
     type: "statuses",
     resolve: true,
@@ -69,25 +72,25 @@ export async function fetchPostByUrl(url, { instanceUrl }) {
     q: url,
   });
 
-  let result = await get(`api/v2/search?${query}`, { instanceUrl });
+  let result = await get(`api/v2/search?${query}`, { instanceHost });
   let post = result.statuses[0];
   if (!post) throw new Error("post not found");
   return post;
 }
 
-export async function fetchRootPostOfThread(post, { instanceUrl }) {
+export async function fetchRootPostOfThread(post, { instanceHost }) {
   let context = await get(`api/v1/statuses/${post.id}/context`, {
-    instanceUrl,
+    instanceHost,
   });
 
   return context.ancestors[0] ?? post;
 }
 
-export async function fetchPostTree(post, { instanceUrl }) {
+export async function fetchPostTree(post, { instanceHost }) {
   post = { ...post };
 
   let context = await get(`api/v1/statuses/${post.id}/context`, {
-    instanceUrl,
+    instanceHost,
   });
 
   let posts = new Map();
@@ -103,17 +106,27 @@ export async function fetchPostTree(post, { instanceUrl }) {
     parent.replies.push(p);
   }
 
+  let postViews = storage.getPostViews(instanceHost);
+  let newPostViews = {};
+  let now = new Date();
+  for (let p of posts.values()) {
+    let postDate = new Date(p.edited_at ?? p.created_at);
+    p.viewed = new Date(postViews[p.id]) >= postDate;
+    newPostViews[p.id] = now;
+  }
+  storage.addPostViews(instanceHost, newPostViews);
+
   return post;
 }
 
 const CLIENT_ID = "CIJFrOR_hvQC0hjR8VGer2a7mEquYYzswH8UmcDsRrE";
 const CLIENT_SECRET = "NvixkNKze_pdrddUP6PIUnK_aYzS1IiAEMevYMREY-k";
 
-async function get(path, { instanceUrl }) {
-  let url = new URL(path, instanceUrl);
+async function get(path, { instanceHost }) {
+  let url = new URL(path, `https://${instanceHost}`);
   let headers = {};
 
-  let token = await storage.getToken(instanceUrl);
+  let token = await storage.getToken(instanceHost);
   if (token) headers.authorization = `Bearer ${token.access_token}`;
 
   let response = await fetch(url, { headers });
