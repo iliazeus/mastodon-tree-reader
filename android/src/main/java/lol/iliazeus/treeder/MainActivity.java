@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
     finish();
   }
 
-  private static final Uri BASE_URL = Uri.parse("https://iliazeus.github.io/mastodon-tree-reader/thread.html");
+  private static final Uri BASE_URL = Uri.parse("https://iliazeus.lol/mastodon-tree-reader/thread.html");
 
   protected void onNewIntent(Intent intent) {
     Uri.Builder url = BASE_URL.buildUpon();
