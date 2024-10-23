@@ -1,6 +1,7 @@
 on:
   push:
     branches: ["master", "ci-*"]
+    paths: ["auth-server"]
 
 env:
   REGISTRY: ghcr.io
