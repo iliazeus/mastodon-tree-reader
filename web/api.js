@@ -29,11 +29,13 @@ function checkLogInCallback() {
 }
 
 async function fetchToken({ instanceHost, code, redirectUri }) {
+  let app = await fetchApp({ instanceHost });
+
   let body = new FormData();
   body.set("grant_type", "authorization_code");
   body.set("code", code);
-  body.set("client_id", CLIENT_ID);
-  body.set("client_secret", CLIENT_SECRET);
+  body.set("client_id", app.client_id);
+  body.set("client_secret", app.client_secret);
   body.set("redirect_uri", redirectUri);
 
   let response = await fetch(`https://${instanceHost}/oauth/token`, {
@@ -46,14 +48,14 @@ async function fetchToken({ instanceHost, code, redirectUri }) {
 }
 
 export async function logIn({ instanceHost }) {
-  if (instanceHost !== "lor.sh") throw new Error(`only implemented for lor.sh`);
+  let app = await fetchApp({ instanceHost });
 
   let redirectUri = new URL(window.location);
   redirectUri.searchParams.set("instance", instanceHost);
 
   let query = new URLSearchParams({
     response_type: "code",
-    client_id: CLIENT_ID,
+    client_id: app.client_id,
     redirect_uri: redirectUri,
   });
 
@@ -62,6 +64,14 @@ export async function logIn({ instanceHost }) {
 
 export async function logOut({ instanceHost }) {
   storage.deleteToken(instanceHost);
+}
+
+async function fetchApp({ instanceHost }) {
+  let response = await fetch(
+    `https://ruvds.iliazeus.lol/mastodon-tree-reader/app?instance=${instanceHost}`
+  );
+  if (!response.ok) throw new Error(await response.text());
+  return await response.json();
 }
 
 export async function fetchPostByUrl(url, { instanceHost }) {
@@ -201,9 +211,6 @@ export async function recapTimeline(timeline, { instanceHost }) {
 
   return [...trees.values()];
 }
-
-const CLIENT_ID = "CIJFrOR_hvQC0hjR8VGer2a7mEquYYzswH8UmcDsRrE";
-const CLIENT_SECRET = "NvixkNKze_pdrddUP6PIUnK_aYzS1IiAEMevYMREY-k";
 
 async function get(path, { instanceHost }) {
   let url = new URL(path, `https://${instanceHost}`);
