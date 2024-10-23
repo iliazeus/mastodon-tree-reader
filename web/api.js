@@ -102,15 +102,14 @@ export async function fetchPostTree(post, { instanceHost, markViewed = true }) {
   let posts = new Map();
   posts.set(post.id, post);
 
-  if (post.replies_count > 0) {
-    let context = await get(`api/v1/statuses/${post.id}/context`, {
-      instanceHost,
-    });
-    post.ancestors = context.ancestors;
-    for (let p of context.descendants) posts.set(p.id, p);
-  } else {
-    post.ancestors = [];
-  }
+  // there used to be a `post.replies_count > 0` condition here to save us a request
+  // but it looks like `replies_count` does not include private replies
+
+  let context = await get(`api/v1/statuses/${post.id}/context`, {
+    instanceHost,
+  });
+  post.ancestors = context.ancestors;
+  for (let p of context.descendants) posts.set(p.id, p);
 
   for (let p of posts.values()) {
     if (!p.replies) p.replies = [];
