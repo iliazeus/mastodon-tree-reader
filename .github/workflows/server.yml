@@ -1,7 +1,7 @@
 on:
   push:
     branches: ["master", "ci-*"]
-    paths: ["auth-server"]
+    paths: [".github/workflows/server.yml", "auth-server/**/*"]
 
 env:
   REGISTRY: ghcr.io
