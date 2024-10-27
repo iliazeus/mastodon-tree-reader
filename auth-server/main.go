@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,36 +23,18 @@ type App struct {
 	ClientSecretExpiresAt string   `json:"client_secret_expires_at"`
 }
 
-type AppListener struct {
-	app chan App
-	err chan error
-}
-
 type j = map[string]any
 
-var appsFilename = ""
-var apps = map[string]App{}
-var pendingApps = map[string][]AppListener{}
-
 func main() {
-	appsFilename = os.Getenv("APPS_FILE")
-	if appsFilename == "" {
-		appsFilename = "apps.json"
+	ctx := context.Background()
+
+	filename := os.Getenv("APPS_FILE")
+	if filename == "" {
+		filename = "apps.json"
 	}
 
-	slog.Info("reading stored apps", "filename", appsFilename)
-
-	bytes, err := os.ReadFile(appsFilename)
-	if err != nil {
-		slog.Warn("error reading stored apps", "error", err)
-	} else {
-		json.Unmarshal(bytes, &apps)
-	}
-
-	slog.Info("loaded stored apps", "count", len(apps))
-	for instance := range apps {
-		slog.Info("loaded stored app", "instance", instance)
-	}
+	cache := NewAppCache(filename)
+	go cache.Run(ctx)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /app", func(w http.ResponseWriter, r *http.Request) {
@@ -67,17 +50,13 @@ func main() {
 			return
 		}
 
-		slog.Info("got request for app", "instance", instance)
-
-		app, err := getOrRegisterApp(instance, slog.With("instance", instance))
+		app, err := cache.Request(instance)
 		if err != nil {
-			slog.Error("error while getting app", "instance", instance, "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(j{"error": err.Error()})
+			json.NewEncoder(w).Encode(j{"error": err})
 			return
 		}
 
-		slog.Info("returned response for app", "instance", instance)
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(app)
 	})
@@ -91,74 +70,105 @@ func main() {
 	http.ListenAndServe(listenAddr, mux)
 }
 
-func getOrRegisterApp(instance string, slog *slog.Logger) (App, error) {
-	app, ok := apps[instance]
-	if ok {
-		slog.Info("got app from store")
+type appCacheRequest struct {
+	instance string
+	result   chan *App
+	err      chan error
+}
+
+type AppCache struct {
+	filename string
+	apps     map[string]*App
+	reqs     chan appCacheRequest
+}
+
+func NewAppCache(filename string) AppCache {
+	slog.Info("reading stored apps", "filename", filename)
+
+	apps := make(map[string]*App)
+	bytes, err := os.ReadFile(filename)
+	if err != nil {
+		slog.Warn("error reading stored apps", "error", err)
+	} else {
+		json.Unmarshal(bytes, &apps)
+	}
+
+	slog.Info("loaded stored apps", "count", len(apps))
+	for instance := range apps {
+		slog.Info("loaded stored app", "instance", instance)
+	}
+
+	return AppCache{
+		filename,
+		apps,
+		make(chan appCacheRequest),
+	}
+}
+
+func (c *AppCache) Request(instance string) (*App, error) {
+	apps := make(chan *App)
+	errs := make(chan error)
+	c.reqs <- appCacheRequest{instance, apps, errs}
+	select {
+	case err := <-errs:
+		return nil, err
+	case app := <-apps:
+		return app, nil
+	}
+}
+
+func (c *AppCache) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case req := <-c.reqs:
+			slog := slog.With("instance", req.instance)
+			slog.Info("got request for app")
+			app, err := c.handleRequest(req.instance, slog)
+			if err != nil {
+				slog.Error("error while handling request", "error", err)
+				req.err <- err
+			} else {
+				req.result <- app
+			}
+		}
+	}
+}
+
+func (c *AppCache) handleRequest(instance string, slog *slog.Logger) (*App, error) {
+	app := c.apps[instance]
+	if app != nil {
+		slog.Info("app found in cache")
 		return app, nil
 	}
 
-	listeners, ok := pendingApps[instance]
-	if ok {
-		slog.Info("app pending")
-
-		var listener AppListener
-		pendingApps[instance] = append(listeners, listener)
-
-		var app App
-		var err error
-
-		select {
-		case app = <-listener.app:
-			return app, nil
-		case err = <-listener.err:
-			return app, err
-		}
-	}
-
-	slog.Info("no app stored, registering")
-
-	pendingApps[instance] = make([]AppListener, 0)
-
-	resp, err := http.PostForm("https://"+instance+"/api/v1/apps", url.Values{
+	slog.Info("no app in cache, requesting from remote")
+	res, err := http.PostForm("https://"+instance+"/api/v1/apps", url.Values{
 		"client_name":   {"Tree Reader"},
 		"website":       {"https://iliazeus.lol/mastodon-tree-reader/thread.html"},
 		"redirect_uris": {"https://iliazeus.lol/mastodon-tree-reader/thread.html"},
 		"scopes":        {"read"},
 	})
-	if err == nil && resp.StatusCode >= 400 {
-		text, err := io.ReadAll(resp.Body)
+	if err == nil && res.StatusCode >= 400 {
+		text, err := io.ReadAll(res.Body)
 		if err == nil {
 			err = errors.New(string(text))
 		}
 	}
 	if err == nil {
-		err = json.NewDecoder(resp.Body).Decode(&app)
+		err = json.NewDecoder(res.Body).Decode(&app)
 	}
-
-	listeners = pendingApps[instance]
-	delete(pendingApps, instance)
-
 	if err != nil {
-		for _, listener := range listeners {
-			listener.err <- err
-			close(listener.app)
-			close(listener.err)
-		}
-		return app, err
+		return nil, err
 	}
 
-	for _, listener := range listeners {
-		listener.app <- app
-		close(listener.app)
-		close(listener.err)
+	slog.Info("got response from remote, storing")
+	c.apps[instance] = app
+	bytes, err := json.Marshal(c.apps)
+	if err == nil {
+		err = os.WriteFile(c.filename, bytes, 0666)
 	}
-
-	slog.Info("registered app, storing in file")
-
-	apps[instance] = app
-	bytes, _ := json.Marshal(apps)
-	err = os.WriteFile(appsFilename, bytes, 0666)
 	if err != nil {
 		slog.Warn("error writing apps to file", "error", err)
 	}
