@@ -46,6 +46,10 @@ export function installPostTree(container, postTree, { instanceHost }) {
     });
   });
 
+  let excerpt = container.querySelector(".content").innerText;
+  if (excerpt.length > 100) excerpt = excerpt.slice(0, 100 - 3) + "...";
+  document.title = excerpt + " | Treeder";
+
   let location = new URL(window.location);
   location.searchParams.set("post", postTree.url);
   window.history.replaceState(null, "", location);
