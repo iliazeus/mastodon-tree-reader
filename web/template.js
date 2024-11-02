@@ -93,9 +93,9 @@ function renderPostTree(
         <div class="content">
           ${post.spoiler_text && `<details><summary>${post.spoiler_text}</summary>`}
           ${processContent(post)}
+          ${renderPoll(post.poll)}
           ${post.spoiler_text && `</details>`}
         </div>
-        ${renderPoll(post.poll)}
         ${renderAttachments(post.media_attachments)}
         <details class="actions">
           <summary></summary>
